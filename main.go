@@ -23,6 +23,7 @@ import (
 	pbzip2 "github.com/d4l3k/go-pbzip2"
 	"github.com/d4l3k/wikigopher/wikitext"
 	"github.com/pkg/errors"
+    "github.com/eyedeekay/sam-forwarder/config"
 )
 
 var (
@@ -31,6 +32,8 @@ var (
 	search          = flag.Bool("search", false, "whether or not to build a search index")
 	searchIndexFile = flag.String("searchIndex", "index.bleve", "the search index file")
 	httpAddr        = flag.String("http", ":8080", "the address to bind HTTP to")
+    i2pForward      = flag.Bool("i2p", false, "forward to i2p via a TCP tunnel")
+    i2pConf         = flag.String("i2pini", "./contrib/tunnels.wikigopher.ini", "Control your i2p tunnel with this SAM port")
 )
 
 var tmpls = map[string]*template.Template{}
@@ -387,9 +390,24 @@ func main() {
 	}
 }
 
+func maybeusei2p(){
+    if *i2pForward {
+		if i2pforwarder, i2perr := i2ptunconf.NewSAMForwarderFromConfig(*i2pConf, "127.0.0.1", "7656"); i2perr != nil {
+			fmt.Printf("Error creating i2p tunnel from config, %s", i2perr.Error())
+			return
+		} else {
+			*httpAddr = i2pforwarder.Target()
+			fmt.Printf("Serving eepSite on, %s", i2pforwarder.Base32())
+			go i2pforwarder.Serve()
+		}
+	}
+}
+
 func run() error {
 	flag.Parse()
 	log.SetFlags(log.Flags() | log.Lshortfile)
+
+    maybeusei2p()
 
 	go func() {
 		if err := loadIndex(); err != nil {
